@@ -82,8 +82,8 @@ function movef($original_filename, $new_filename) {
 
 function copyf($original_filename, $new_filename) {
     if (is_file($original_filename)) {
-	    $str = readf($original_filename);
-	    writef($str, $new_filename);
+        $str = readf($original_filename);
+        writef($str, $new_filename);
     }
 }
 
@@ -127,29 +127,28 @@ function linesToStr($lines) {
 
 function linesToRows($lines) {
     $rows = array();
-	if (is_array($lines)) {
-		foreach ($lines as $line_index => $line) {
-			$row = explode(SEPARATOR, $line);
-			array_push($rows, $row);
-		}
-	}
-	return $rows;
+    if (is_array($lines)) {
+        foreach ($lines as $line_index => $line) {
+            $row = explode(SEPARATOR, $line);
+            array_push($rows, $row);
+        }
+    }
+    return $rows;
 }
 
 function rowsToLines($rows) {
     $lines = array();
-	if (is_array($rows)) {
-		foreach ($rows as $row) {
-			$line = "";
+    if (is_array($rows)) {
+        foreach ($rows as $row) {
+            $line = "";
             $cells_length = count($row);
-			$cell_counter = 0;
-			foreach ($row as $cell_index => $cell_value) {
-				$line .= $cell_value . (++$cell_counter === $cells_length ? "" : SEPARATOR);
-			}
-			array_push($lines, $line);
-			
-		}
-	}
+            $cell_counter = 0;
+            foreach ($row as $cell_index => $cell_value) {
+                $line .= $cell_value . (++$cell_counter === $cells_length ? "" : SEPARATOR);
+            }
+            array_push($lines, $line);          
+        }
+    }
     return $lines;
 }
 
@@ -185,16 +184,16 @@ function pushKeys($rows) {
         $keyed = array();
         $fields = array_shift($rows);
         if ($rows) {
-			foreach ($rows as $row_index => $row) {
-				foreach ($row as $cell_index => $cell_value) {
-					$cell_key = isset($fields[$cell_index]) ? $fields[$cell_index] : "undefined";
-					$keyed[$row_index][formatKey($cell_key)] = $cell_value;
-				}
-			}
+            foreach ($rows as $row_index => $row) {
+                foreach ($row as $cell_index => $cell_value) {
+                    $cell_key = isset($fields[$cell_index]) ? $fields[$cell_index] : "undefined";
+                    $keyed[$row_index][formatKey($cell_key)] = $cell_value;
+                }
+            }
             $rows = $keyed;
         }
     }
-	return $rows;
+    return $rows;
 }
 
 function popKeys($rows) {
@@ -202,23 +201,23 @@ function popKeys($rows) {
         $new_rows = array();
         $new_rows[0] = array();
         if (isset($rows[0])) {
-			$row = $rows[0];
-			foreach ($row as $key => $value) {
-				array_push($new_rows[0], $key);
-			}
-			$rows_length = count($rows);
-			foreach ($rows as $row_index => $row) {
-				$new_row = array();
-				$i = 0;
-				foreach ($row as $cell_key => $cell_value) {
-					$new_row[$i++] = $cell_value;
-				}
-				array_push($new_rows, $new_row);
-			}
-			$rows = $new_rows;
+            $row = $rows[0];
+            foreach ($row as $key => $value) {
+                array_push($new_rows[0], $key);
+            }
+            $rows_length = count($rows);
+            foreach ($rows as $row_index => $row) {
+                $new_row = array();
+                $i = 0;
+                foreach ($row as $cell_key => $cell_value) {
+                    $new_row[$i++] = $cell_value;
+                }
+                array_push($new_rows, $new_row);
+            }
+            $rows = $new_rows;
         }
     }
-	return $rows;
+    return $rows;
 }
 
 //Makes sure the array key is in a valid format
