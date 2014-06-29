@@ -1,5 +1,5 @@
 file.php
 ========
 
-A library for reading a file into an array and writing an array to a file.
+A PHP library for reading a text file into an array and writing an array to a text file.
 
