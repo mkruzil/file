@@ -1,5 +1,5 @@
 file.php
 ========
 
-A PHP library for reading and writing to a text file.
+A PHP library for reading from and writing to a text file.
 
