@@ -2,9 +2,9 @@
 
 /*
 
-file.php
+File.php
 
-A library for reading a file into an array and writing an array to a file.
+A library for reading a file and writing to a file.
 
 Copyright (c) 2014 Mike Kruzil
 
@@ -28,224 +28,118 @@ SOFTWARE.
 
 */
 
-define("SEPARATOR", ",");
+class File {
 
-function open($filename) {
-    $str = readf($filename);
-    $lines = strToLines($str);
-    $rows = linesToRows($lines);
-    $rows = pushKeys($rows);
-    $rows = code($rows, "decode");
-    return $rows;
-}
+    private $path;
+    private $mode;
+    private $handle;
+    private $contents;
 
-function save($rows, $filename) {
-    $bytes = 0;
-    $rows = tableize($rows);
-    $rows = code($rows, "encode");
-    $rows = popKeys($rows);
-    $lines = rowsToLines($rows);
-    $str = linesToStr($lines);
-    $bytes = writef($str, $filename);
-    return $bytes;
-}
+    function __construct($path) {
+        $this->path = $path;
+        $this->contents = "";
+    }
 
-function readf($filename, $mode = "r", $position = 0) {
-    $contents = "";
-    $is_valid_mode = ($mode === "r") || ($mode === "r+") || ($mode === "w") || ($mode === "w+") || ($mode === "a") || ($mode === "a+") || ($mode === "x") ||($mode === "x+") || ($mode === "c") || ($mode === "c+");
-    //Valid modes other than r or r+ are able to create a new file if fopen fails due to the file not existing
-    $creates_if_not_exists = !(!is_file($filename) && ($mode === "r" || $mode === "r+"));
-    if ($is_valid_mode && $creates_if_not_exists) {
-        $pointer = @fopen($filename, $mode . "b"); 
-        if (is_resource($pointer)) {
-            flock($pointer, $mode === "r" ? LOCK_SH : LOCK_EX); //Apply lock
+    public function open($mode = "r+") {
+        if ($mode !== $this->mode) {
+            $path = $this->path;
+            //Check to make sure this is a valid mode, and if the file doesn't exist, it can be created without error
+            if ($this->isValidMode($mode) && !(!is_file($this->path) && !$this->isCreatableMode($mode))) {
+                $handle = @fopen($path, $mode . "b"); 
+                if (is_resource($handle)) {
+                    flock($handle, $mode === "r" ? LOCK_SH : LOCK_EX); //Apply lock
+                    $this->mode = $mode;
+                    if ($this->handle) {
+                        $this->close();
+                    }
+                    $this->handle = $handle;
+                }
+            }
+        }
+    }
+
+    public function read($position = 0) {
+        $contents = "";
+        $handle = $this->handle;
+        if (is_resource($handle) && $this->isReadableMode($this->mode)) {
             clearstatcache(); //To get most up-to-date file size
-            $bytes = filesize($filename);
+            $bytes = filesize($this->path);
             if ($bytes) {
-                if ($position === 0 && (ftell($pointer) > 0)) {
-                    rewind($pointer);
+                if ($position === 0 && (ftell($handle) > 0)) {
+                    rewind($handle);
                 } else {
-                    fseek($pointer, $position);
+                    fseek($handle, $position);
                 }
-                $contents = fread($pointer, $bytes);
+                $contents = fread($handle, $bytes);
             }
         }
+        $this->contents = $contents;
     }
-    return $contents;
-}
 
-function movef($original_filename, $new_filename) {
-    if (is_file($original_filename)) {
-        rename($original_filename, $new_filename);
-    }
-}
-
-function copyf($original_filename, $new_filename) {
-    if (is_file($original_filename)) {
-        $str = readf($original_filename);
-        writef($str, $new_filename);
-    }
-}
-
-function writef($str, $filename, $mode = "w") {
-    $bytes = 0;
-    //chmod o+w filename.ext
-    if (!is_dir($filename)) {
-        $pointer = @fopen($filename, $mode . "b");
-        if (is_resource($pointer)) {
-            $bytes = fwrite($pointer, $str);
-        }
-    }
-    return $bytes;
-}
-
-function strToLines($str, $eol = "\n") {
-    $lines = array();
-    if ($str && is_string($str)) {
-        /* Newlines (http://en.wikipedia.org/wiki/End_of_line) */
-        /* --------------------------------------------------- */
-        $lf = "\n";     //Unix, Mac (OS10+)
-        $cr = "\r";     //Mac (up to OS9)
-        $crlf = "\r\n"; //Windows
-        $lfcr = "\n\r"; //Acorn, RISC
-        $str = str_replace(array($lfcr, $crlf, $cr, $lf), $eol, $str);
-        //If str is null, explode will still create a line
-        $lines = explode($eol, $str);
-    }
-    return $lines;
-}
-
-function linesToStr($lines) {
-    $str = "";
-    $lines_length = count($lines);
-    $lines_counter = 0;
-    foreach ($lines as $line) {
-        $str .= $line . (++$lines_counter < $lines_length ? "\n" : "");        
-    }
-    return $str;
-}
-
-function linesToRows($lines) {
-    $rows = array();
-    if (is_array($lines)) {
-        foreach ($lines as $line_index => $line) {
-            $row = explode(SEPARATOR, $line);
-            array_push($rows, $row);
-        }
-    }
-    return $rows;
-}
-
-function rowsToLines($rows) {
-    $lines = array();
-    if (is_array($rows)) {
-        foreach ($rows as $row) {
-            $line = "";
-            $cells_length = count($row);
-            $cell_counter = 0;
-            foreach ($row as $cell_index => $cell_value) {
-                $line .= $cell_value . (++$cell_counter === $cells_length ? "" : SEPARATOR);
-            }
-            array_push($lines, $line);          
-        }
-    }
-    return $lines;
-}
-
-//Code: http://en.wikipedia.org/wiki/Encoding
-function code($rows, $process) {
-    $search = "";
-    $replace = "";
-    $decoded = array(SEPARATOR, "\t", "\n", "\r");
-    $encoded = array("(\\" . ord(SEPARATOR) . ")", "(\\9)", "(\\10)", "(\\13)");
-    if (is_array($rows)) {
-        //Encode
-        if ($process === "encode") {
-            $search = $decoded;
-            $replace = $encoded;
-        //Decode
-        } else if ($process === "decode") {
-            $search = $encoded;
-            $replace = $decoded;
-        }
-        foreach ($rows as $index => $row) {
-            if (is_array($row)) {
-                foreach ($row as $name => $value) {
-                    $rows[$index][$name] = str_replace($search, $replace, $value);
+    public function write($replace = true) {
+        $bytes = 0;
+        $path = $this->path;
+        if (!is_dir($path)) {
+            $handle = $this->handle;
+            if (is_resource($handle) && $this->isWritableMode($this->mode)) {
+                if ($replace) {
+                    ftruncate($handle, 0);
+                    //Move the pointer back to the beginning of the file
+                    rewind($handle);
                 }
+                //chmod o+w filename.ext
+                $bytes = fwrite($handle, $this->contents);
             }
         }
+        return $bytes;
     }
-    return $rows;
-}
 
-function pushKeys($rows) {
-    if (is_array($rows)) {
-        $keyed = array();
-        $fields = array_shift($rows);
-        if ($rows) {
-            foreach ($rows as $row_index => $row) {
-                foreach ($row as $cell_index => $cell_value) {
-                    $cell_key = isset($fields[$cell_index]) ? $fields[$cell_index] : "undefined";
-                    $keyed[$row_index][formatKey($cell_key)] = $cell_value;
-                }
-            }
-            $rows = $keyed;
+    private function isValidMode($mode) {
+        return ($mode === "r") || ($mode === "r+") || ($mode === "w") || ($mode === "w+") || ($mode === "a") || ($mode === "a+") || ($mode === "x") ||($mode === "x+") || ($mode === "c") || ($mode === "c+");
+    }
+
+    private function isReadableMode($mode) {
+        return $this->isValidMode($mode) && ($mode !== "w") && ($mode !== "a") && ($mode !== "x") && ($mode !== "c");
+    }
+
+    private function isWritableMode($mode) {
+        return $this->isValidMode($mode) && ($mode !== "r");
+    }
+
+    private function isCreatableMode($mode) {
+        return $this->isValidMode($mode) && ($mode !== "r") && ($mode !== "r+");
+    }
+
+    public function getPath() {
+        return $this->path;
+    }
+
+    public function getMode() {
+        return $this->mode;
+    }
+
+    public function getContents() {
+        return $this->contents;
+    }
+
+    public function setMode($mode) {
+        $this->mode = $this->isValidMode($mode) ? $mode : "r+";
+    }
+
+    public function setContents($contents) {
+        $this->contents = $contents;
+    }
+
+    public function delete() {
+        $this->close();
+        unlink($this->path);
+    }
+
+    public function close() {
+        $this->mode = "";
+        if (is_resource($this->handle)) {
+            fclose($this->handle);
         }
     }
-    return $rows;
 }
-
-function popKeys($rows) {
-    if (is_array($rows)) {
-        $new_rows = array();
-        $new_rows[0] = array();
-        if (isset($rows[0])) {
-            $row = $rows[0];
-            foreach ($row as $key => $value) {
-                array_push($new_rows[0], $key);
-            }
-            $rows_length = count($rows);
-            foreach ($rows as $row_index => $row) {
-                $new_row = array();
-                $i = 0;
-                foreach ($row as $cell_key => $cell_value) {
-                    $new_row[$i++] = $cell_value;
-                }
-                array_push($new_rows, $new_row);
-            }
-            $rows = $new_rows;
-        }
-    }
-    return $rows;
-}
-
-//Makes sure the array key is in a valid format
-function formatKey($value) {
-    $key = strtolower($value);
-    $key = str_replace(" ", "_" , $key);
-    return $key;
-}
-
-//Make sure the rows data is in a tabular format
-function tableize($rows) {
-    if (is_array($rows)) {
-        if (!isset($rows[0])) {
-            $tmp = array();
-            $tmp[0] = $rows; 
-            $rows = $tmp;
-        }
-    } else {
-        $rows = array($rows);
-    }
-    foreach ($rows as $index => $row) {
-        if (!is_array($row)) {
-            $tmp = array();
-            $tmp["field"] = $row;
-            $rows[$index] = $tmp;
-        }
-    }
-    return $rows;   
-}
-
 ?>
